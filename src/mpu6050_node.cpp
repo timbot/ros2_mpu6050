@@ -45,7 +45,6 @@ void Mpu6050Node::ImuPubCallback()
     auto message = sensor_msgs::msg::Imu();
     message.header.stamp = this->get_clock()->now();
     message.header.frame_id = "base_link";
-    message.linear_acceleration_covariance = {0};
 
     /* Read IMU data */
     Mpu6050::Mpu6050_AccelData_t AccelData;
@@ -57,16 +56,36 @@ void Mpu6050Node::ImuPubCallback()
     message.linear_acceleration.x = AccelData.Accel_X - accel_x_offset_;
     message.linear_acceleration.y = AccelData.Accel_Y - accel_y_offset_;
     message.linear_acceleration.z = AccelData.Accel_Z - accel_z_offset_;
-    message.angular_velocity_covariance[0] = {0};
+    
+    // Set accelerometer covariance (3x3 diagonal matrix as 9-element array)
+    // MPU6050 accelerometer noise: ~0.1 m/s^2 typical
+    message.linear_acceleration_covariance = {
+        0.01, 0.0,  0.0,
+        0.0,  0.01, 0.0,
+        0.0,  0.0,  0.01
+    };
+    
     message.angular_velocity.x = (GyroData.Gyro_X - gyro_x_offset_) * (M_PI / 180.0);
     message.angular_velocity.y = (GyroData.Gyro_Y - gyro_y_offset_) * (M_PI / 180.0);
     message.angular_velocity.z = (GyroData.Gyro_Z - gyro_z_offset_) * (M_PI / 180.0);
     
+    // Set gyroscope covariance (3x3 diagonal matrix as 9-element array)
+    // MPU6050 gyro noise: ~0.05 deg/s typical -> ~0.001 rad/s
+    message.angular_velocity_covariance = {
+        0.001, 0.0,   0.0,
+        0.0,   0.001, 0.0,
+        0.0,   0.0,   0.001
+    };
+    
+    // MPU6050 does not provide orientation (no magnetometer)
+    // Set covariance[0] = -1 to indicate orientation is not available
     message.orientation_covariance[0] = -1;
+    // Set to identity quaternion (though it won't be used due to covariance flag)
     message.orientation.x = 0;
     message.orientation.y = 0;
     message.orientation.z = 0;
-    message.orientation.w = 0;
+    message.orientation.w = 1;  // Valid identity quaternion
+    
     publisher_->publish(message);
 }
 
